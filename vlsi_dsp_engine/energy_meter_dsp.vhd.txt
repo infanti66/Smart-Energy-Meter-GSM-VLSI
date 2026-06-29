@@ -1,0 +1,47 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+entity energy_meter_dsp is
+    Port (
+        clk             : in  STD_LOGIC; -- Main system clock
+        reset           : in  STD_LOGIC; -- Hardware system clear
+        v_sample        : in  STD_LOGIC_VECTOR(15 downto 0); -- 16-bit Voltage ADC input
+        i_sample        : in  STD_LOGIC_VECTOR(15 downto 0); -- 16-bit Current ADC input
+        sample_ready    : in  STD_LOGIC; -- Strobe signal indicating fresh ADC values
+        accum_energy    : out STD_LOGIC_VECTOR(31 downto 0)  -- Accumulated energy output
+    );
+end energy_meter_dsp;
+
+architecture Behavioral of energy_meter_dsp is
+    signal sign_v       : signed(15 downto 0);
+    signal sign_i       : signed(15 downto 0);
+    signal inst_power   : signed(31 downto 0) := (others => '0');
+    signal energy_total : unsigned(63 downto 0) := (others => '0');
+begin
+
+    process(clk, reset)
+    begin
+        if reset = '1' then
+            inst_power   <= (others => '0');
+            energy_total <= (others => '0');
+        elsif rising_edge(clk) then
+            if sample_ready = '1' then
+                sign_v <= signed(v_sample);
+                sign_i <= signed(i_sample);
+                
+                -- High-speed DSP Multiply operation for Instantaneous Power
+                inst_power <= signed(v_sample) * signed(i_sample);
+                
+                -- Accumulate absolute active power consumption over time (Integration)
+                if inst_power > 0 then
+                    energy_total <= energy_total + unsigned(inst_power);
+                end if;
+            end if;
+        end if;
+    end process;
+
+    -- Output the upper 32 bits of the accumulator for the microcontroller register interface
+    accum_energy <= std_logic_vector(energy_total(63 downto 32));
+
+end Behavioral;
